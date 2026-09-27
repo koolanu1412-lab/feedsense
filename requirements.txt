@@ -3,3 +3,6 @@ Flask-Cors
 reportlab
 qrcode[pil]
 gunicorn
+scikit-learn
+joblib
+numpy
