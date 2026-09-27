@@ -3,6 +3,12 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 
+import com.example.feedsense.ui.storage.LocalSampleRecord
+
+
+import androidx.compose.ui.platform.LocalContext
+import com.example.feedsense.ui.storage.LocalStorage
+
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 
@@ -10,7 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -76,11 +82,31 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun FeedSenseApp() {
 
-    var currentScreen by remember { mutableStateOf("language") }
-    var selectedLanguage by remember {
-        mutableStateOf(appLanguages.first())
+    val context = LocalContext.current
+
+    val localStorage = remember {
+        LocalStorage(context.applicationContext)
     }
-    var selectedTest by remember { mutableStateOf("") }
+
+    var currentScreen by remember {
+        mutableStateOf("language")
+    }
+
+    var selectedLanguage by remember {
+
+        val savedLanguageCode =
+            localStorage.getLanguageCode()
+
+        mutableStateOf(
+            appLanguages.firstOrNull {
+                it.code == savedLanguageCode
+            } ?: appLanguages.first()
+        )
+    }
+
+    var selectedTest by remember {
+        mutableStateOf("")
+    }
 
     when (currentScreen) {
 
@@ -89,7 +115,12 @@ fun FeedSenseApp() {
                 languages = appLanguages,
                 selectedLanguage = selectedLanguage,
                 onLanguageSelected = {
+
                     selectedLanguage = it
+
+                    localStorage.saveLanguage(
+                        it.code
+                    )
                 },
                 onContinue = {
                     currentScreen = "home"
@@ -146,6 +177,12 @@ fun FeedSenseApp() {
                     currentScreen = "test"
                 },
                 onAnalyze = {
+
+                    localStorage.saveSample(
+                        type = selectedTest,
+                        status = "Awaiting verified measurement"
+                    )
+
                     currentScreen = "analysis"
                 }
             )
@@ -195,6 +232,7 @@ fun FeedSenseApp() {
         "history" -> {
             HistoryScreen(
                 language = selectedLanguage,
+                samples = localStorage.getSamples(),
                 onBack = {
                     currentScreen = "home"
                 }
@@ -215,6 +253,10 @@ fun FeedSenseApp() {
                 language = selectedLanguage,
                 onLanguageChange = {
                     selectedLanguage = it
+
+                    localStorage.saveLanguage(
+                        it.code
+                    )
                 },
                 onBack = {
                     currentScreen = "home"
@@ -223,7 +265,6 @@ fun FeedSenseApp() {
         }
     }
 }
-
 
 /* -------------------------------------------------------
    LANGUAGE SCREEN
@@ -1469,6 +1510,7 @@ fun QrScreen(
 @Composable
 fun HistoryScreen(
     language: AppLanguage,
+    samples: List<LocalSampleRecord>,
     onBack: () -> Unit
 ) {
 
@@ -1478,14 +1520,46 @@ fun HistoryScreen(
         backText = language.back
     ) {
 
-        EmptyStateCard(
-            emoji = "📋",
-            title = language.noVerifiedTests,
-            description = language.noVerifiedTestsDescription
-        )
+        if (samples.isEmpty()) {
+
+            EmptyStateCard(
+                emoji = "📋",
+                title = language.noVerifiedTests,
+                description = language.noVerifiedTestsDescription
+            )
+
+        } else {
+
+            Text(
+                text = "Saved tests: ${samples.size}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            samples.forEach { sample ->
+
+                LargeChoiceCard(
+                    emoji = if (sample.type == "Feed") {
+                        "🌾"
+                    } else {
+                        "🌱"
+                    },
+                    title = if (sample.type == "Feed") {
+                        language.testFeed
+                    } else {
+                        language.testSilage
+                    },
+                    description = "${sample.id}\n${sample.status}",
+                    onClick = { }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+        }
     }
 }
-
 /* -------------------------------------------------------
    REPORTS
 ------------------------------------------------------- */
