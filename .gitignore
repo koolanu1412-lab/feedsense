@@ -1,7 +1,32 @@
+# Python
 __pycache__/
 *.pyc
 .venv/
 venv/
 env/
 .env
+
+# VS Code
 .vscode/
+
+# Android Studio / IntelliJ
+.idea/
+**/.idea/
+
+# Gradle
+.gradle/
+**/.gradle/
+
+# Kotlin
+.kotlin/
+**/.kotlin/
+
+# Android local configuration
+local.properties
+
+# Android build files
+build/
+**/build/
+
+# IDE module files
+*.iml
