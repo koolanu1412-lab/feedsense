@@ -1,4 +1,20 @@
 package com.example.feedsense
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import com.example.feedsense.ui.localization.AppLanguage
 import com.example.feedsense.ui.localization.appLanguages
 import android.os.Bundle
@@ -130,6 +146,16 @@ fun FeedSenseApp() {
                     currentScreen = "test"
                 },
                 onAnalyze = {
+                    currentScreen = "analysis"
+                }
+            )
+        }
+
+        "analysis" -> {
+            AnalysisProgressScreen(
+                language = selectedLanguage,
+                testType = selectedTest,
+                onComplete = {
                     currentScreen = "results"
                 }
             )
@@ -727,6 +753,58 @@ fun SampleScreen(
     onAnalyze: () -> Unit
 ) {
 
+    val context = LocalContext.current
+
+    var previewBitmap by remember {
+        mutableStateOf<Bitmap?>(null)
+    }
+
+    var galleryUri by remember {
+        mutableStateOf<Uri?>(null)
+    }
+
+    var imageSource by remember {
+        mutableStateOf("")
+    }
+
+    val cameraLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicturePreview()
+        ) { bitmap ->
+
+            if (bitmap != null) {
+                previewBitmap = bitmap
+                imageSource = "Camera"
+            }
+        }
+
+    val galleryLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent()
+        ) { uri ->
+
+            galleryUri = uri
+
+            if (uri != null) {
+                imageSource = "Gallery"
+            }
+        }
+
+    LaunchedEffect(galleryUri) {
+
+        galleryUri?.let { uri ->
+
+            previewBitmap = withContext(Dispatchers.IO) {
+
+                context.contentResolver
+                    .openInputStream(uri)
+                    ?.use { inputStream ->
+                        BitmapFactory.decodeStream(inputStream)
+                    }
+            }
+        }
+    }
+
     SimpleScreen(
         title = if (testType == "Feed") {
             "🌾 ${language.feedTypeTitle}"
@@ -745,38 +823,120 @@ fun SampleScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        /*
+         * CAMERA
+         */
+
         LargeChoiceCard(
             emoji = "📷",
             title = language.visualInspection,
             description = language.visualInspectionDescription,
-            onClick = { }
+            onClick = {
+                cameraLauncher.launch(null)
+            }
         )
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        /*
+         * GALLERY
+         */
+
+        LargeChoiceCard(
+            emoji = "🖼️",
+            title = "Choose Sample Image",
+            description = "Select an existing feed or silage image.",
+            onClick = {
+                galleryLauncher.launch("image/*")
+            }
+        )
+
+        /*
+         * IMAGE PREVIEW
+         */
+
+        previewBitmap?.let { bitmap ->
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+
+                    Text(
+                        text = "✅ $imageSource sample",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = "Selected sample image",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+                            .clip(RoundedCornerShape(14.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Used only for visible/external inspection.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
+
+        /*
+         * SPECTROMETER
+         */
 
         LargeChoiceCard(
             emoji = "🔬",
             title = language.spectrometer,
             description = language.spectrometerDescription,
-            onClick = { }
+            onClick = {
+                // Hardware connection will be added later.
+            }
         )
 
         Spacer(modifier = Modifier.height(12.dp))
+
+        /*
+         * SENSORS
+         */
 
         LargeChoiceCard(
             emoji = "📡",
             title = language.sensors,
             description = language.sensorsDescription,
-            onClick = { }
+            onClick = {
+                // Sensor connection will be added later.
+            }
         )
 
         Spacer(modifier = Modifier.height(18.dp))
+
+        /*
+         * SCIENTIFIC EXPLANATION
+         */
 
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                containerColor =
+                    MaterialTheme.colorScheme.secondaryContainer
             )
         ) {
 
@@ -789,7 +949,7 @@ fun SampleScreen(
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(7.dp))
 
                 Text(
                     text = language.cameraOnlyNote
@@ -803,7 +963,7 @@ fun SampleScreen(
                     text = language.sensorsNote
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(7.dp))
 
                 Text(
                     text = language.verifiedDataDescription,
@@ -826,6 +986,160 @@ fun SampleScreen(
                 text = "🤖 ${language.analyze}",
                 fontSize = 17.sp
             )
+        }
+    }
+}
+
+@Composable
+fun AnalysisProgressScreen(
+    language: AppLanguage,
+    testType: String,
+    onComplete: () -> Unit
+) {
+
+    var currentStep by remember {
+        mutableStateOf(0)
+    }
+
+    LaunchedEffect(Unit) {
+
+        delay(800)
+        currentStep = 1
+
+        delay(1000)
+        currentStep = 2
+
+        delay(1000)
+        currentStep = 3
+
+        delay(1000)
+        onComplete()
+    }
+
+    SimpleScreen(
+        title = "🤖 ${language.analysisResults}",
+        onBack = {
+            onComplete()
+        },
+        backText = language.back
+    ) {
+
+        Text(
+            text = if (testType == "Feed") {
+                language.feedTypeTitle
+            } else {
+                language.silageTypeTitle
+            },
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        AnalysisStepCard(
+            emoji = "📷",
+            title = language.visualInspection,
+            active = currentStep >= 0,
+            complete = currentStep >= 1
+        )
+
+        AnalysisStepCard(
+            emoji = "🔬",
+            title = language.spectrometer,
+            active = currentStep >= 1,
+            complete = currentStep >= 2
+        )
+
+        AnalysisStepCard(
+            emoji = "📡",
+            title = language.sensors,
+            active = currentStep >= 2,
+            complete = currentStep >= 3
+        )
+
+        AnalysisStepCard(
+            emoji = "🤖",
+            title = "AI / ML Processing",
+            active = currentStep >= 3,
+            complete = false
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Preparing verified result...",
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text =
+                "No nutritional value is generated until validated measurement data is available.",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+fun AnalysisStepCard(
+    emoji: String,
+    title: String,
+    active: Boolean,
+    complete: Boolean
+) {
+
+    val containerColor =
+        if (active)
+            MaterialTheme.colorScheme.primaryContainer
+        else
+            MaterialTheme.colorScheme.surfaceVariant
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = containerColor
+        )
+    ) {
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Text(
+                text = emoji,
+                fontSize = 28.sp
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = when {
+                        complete -> "✅ Complete"
+                        active -> "⏳ Processing..."
+                        else -> "Waiting"
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 }
