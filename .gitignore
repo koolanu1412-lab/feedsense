@@ -5,3 +5,9 @@ venv/
 env/
 .env
 .vscode/
+
+feedsense.db
+
+uploads/*
+reports/*
+qr_codes/*

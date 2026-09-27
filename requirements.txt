@@ -1,0 +1,5 @@
+Flask
+Flask-Cors
+reportlab
+qrcode[pil]
+gunicorn
