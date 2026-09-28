@@ -62,12 +62,12 @@ def analyze_sample(data, image_path=None):
         "spectrum",
         []
     )
-    
+
     nir_values = [
         point["absorbance"]
         for point in nir_points
     ]
-    
+
     ml_result = predict_nutrition(
         moisture=moisture,
         ph=ph,
