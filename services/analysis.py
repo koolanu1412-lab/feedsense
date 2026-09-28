@@ -57,11 +57,16 @@ def analyze_sample(data, image_path=None):
         # Current spectrometer implementation is still a
         # simulated/demo spectrum.
         spectrum = generate_demo_spectrum()
-
-        nir_values = spectrum.get(
-            "intensity",
+        
+        nir_points = spectrum.get(
+            "spectrum",
             []
         )
+        
+        nir_values = [
+            point["absorbance"]
+            for point in nir_points
+        ]
 
         ml_result = predict_nutrition(
             moisture=moisture,
