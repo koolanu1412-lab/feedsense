@@ -200,9 +200,7 @@ def analyze():
             result
         )
 
-        saved_sample = get_sample(
-            sample_id
-        )
+        
 
         # -------------------------------------------------
         # SAVE TO DATABASE
