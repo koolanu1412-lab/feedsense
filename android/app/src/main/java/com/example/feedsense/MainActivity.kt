@@ -1,4 +1,8 @@
 package com.example.feedsense
+
+import com.example.feedsense.ui.network.ApiAnalysisResult
+import com.example.feedsense.ui.network.FeedSenseApi
+
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -103,6 +107,17 @@ fun FeedSenseApp() {
             } ?: appLanguages.first()
         )
     }
+    var selectedImage by remember {
+        mutableStateOf<Bitmap?>(null)
+    }
+
+    var analysisResult by remember {
+        mutableStateOf<ApiAnalysisResult?>(null)
+    }
+
+    var analysisError by remember {
+        mutableStateOf<String?>(null)
+    }
 
     var selectedTest by remember {
         mutableStateOf("")
@@ -176,12 +191,11 @@ fun FeedSenseApp() {
                 onBack = {
                     currentScreen = "test"
                 },
-                onAnalyze = {
+                onAnalyze = { bitmap ->
 
-                    localStorage.saveSample(
-                        type = selectedTest,
-                        status = "Awaiting verified measurement"
-                    )
+                    selectedImage = bitmap
+                    analysisResult = null
+                    analysisError = null
 
                     currentScreen = "analysis"
                 }
@@ -192,7 +206,30 @@ fun FeedSenseApp() {
             AnalysisProgressScreen(
                 language = selectedLanguage,
                 testType = selectedTest,
-                onComplete = {
+
+                onAnalyze = {
+                    FeedSenseApi.analyzeSample(
+                        sampleType = selectedTest,
+                        imageBitmap = selectedImage
+                    )
+                },
+
+                onComplete = { result ->
+
+                    analysisResult = result
+
+                    localStorage.saveSample(
+                        type = selectedTest,
+                        status = "ML demo result available"
+                    )
+
+                    currentScreen = "results"
+                },
+
+                onError = { error ->
+
+                    analysisError = error
+
                     currentScreen = "results"
                 }
             )
@@ -202,6 +239,8 @@ fun FeedSenseApp() {
             ResultsScreen(
                 language = selectedLanguage,
                 testType = selectedTest,
+                result = analysisResult,
+                error = analysisError,
                 onBackHome = {
                     currentScreen = "home"
                 },
@@ -791,7 +830,7 @@ fun SampleScreen(
     language: AppLanguage,
     testType: String,
     onBack: () -> Unit,
-    onAnalyze: () -> Unit
+    onAnalyze: (Bitmap?) -> Unit,
 ) {
 
     val context = LocalContext.current
@@ -1016,7 +1055,9 @@ fun SampleScreen(
         Spacer(modifier = Modifier.height(18.dp))
 
         Button(
-            onClick = onAnalyze,
+            onClick = {
+                onAnalyze(previewBitmap)
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(55.dp),
@@ -1035,7 +1076,9 @@ fun SampleScreen(
 fun AnalysisProgressScreen(
     language: AppLanguage,
     testType: String,
-    onComplete: () -> Unit
+    onAnalyze: suspend () -> ApiAnalysisResult,
+    onComplete: (ApiAnalysisResult) -> Unit,
+    onError: (String) -> Unit
 ) {
 
     var currentStep by remember {
@@ -1044,24 +1087,38 @@ fun AnalysisProgressScreen(
 
     LaunchedEffect(Unit) {
 
-        delay(800)
-        currentStep = 1
+        try {
 
-        delay(1000)
-        currentStep = 2
+            currentStep = 1
 
-        delay(1000)
-        currentStep = 3
+            delay(500)
 
-        delay(1000)
-        onComplete()
+            currentStep = 2
+
+            delay(500)
+
+            currentStep = 3
+
+            val result = onAnalyze()
+
+            currentStep = 4
+
+            delay(300)
+
+            onComplete(result)
+
+        } catch (error: Exception) {
+
+            onError(
+                error.message
+                    ?: "Unable to connect to FeedSense backend."
+            )
+        }
     }
 
     SimpleScreen(
         title = "🤖 ${language.analysisResults}",
-        onBack = {
-            onComplete()
-        },
+        onBack = { },
         backText = language.back
     ) {
 
@@ -1075,7 +1132,9 @@ fun AnalysisProgressScreen(
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(
+            modifier = Modifier.height(24.dp)
+        )
 
         AnalysisStepCard(
             emoji = "📷",
@@ -1102,22 +1161,30 @@ fun AnalysisProgressScreen(
             emoji = "🤖",
             title = "AI / ML Processing",
             active = currentStep >= 3,
-            complete = false
+            complete = currentStep >= 4
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(
+            modifier = Modifier.height(24.dp)
+        )
 
         Text(
-            text = "Preparing verified result...",
+            text = if (currentStep >= 4) {
+                "Analysis completed"
+            } else {
+                "Connecting to FeedSense AI..."
+            },
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(
+            modifier = Modifier.height(10.dp)
+        )
 
         Text(
             text =
-                "No nutritional value is generated until validated measurement data is available.",
+                "Current nutrition results use the prototype ML model and are not laboratory validated.",
             style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
@@ -1194,6 +1261,8 @@ fun AnalysisStepCard(
 fun ResultsScreen(
     language: AppLanguage,
     testType: String,
+    result: ApiAnalysisResult?,
+    error: String?,
     onBackHome: () -> Unit,
     onQr: () -> Unit
 ) {
@@ -1214,110 +1283,202 @@ fun ResultsScreen(
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
+
+        // -------------------------------------------------
+        // ERROR
+        // -------------------------------------------------
+
+        if (error != null) {
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor =
+                        MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+
+                Column(
+                    modifier = Modifier.padding(20.dp)
+                ) {
+
+                    Text(
+                        text = "⚠️ Analysis failed",
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Text(
+                        text = error
+                    )
+
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
+                    )
+
+                    Text(
+                        text =
+                            "Check that the FeedSense backend is running and your phone is connected to the same Wi-Fi network.",
+                        style =
+                            MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            return@SimpleScreen
+        }
+
+        // -------------------------------------------------
+        // NO RESULT
+        // -------------------------------------------------
+
+        if (result == null) {
+
+            EmptyStateCard(
+                emoji = "⏳",
+                title = "No analysis result",
+                description =
+                    "No result was received from the FeedSense backend."
+            )
+
+            return@SimpleScreen
+        }
+
+        // -------------------------------------------------
+        // QUALITY SCORE
+        // -------------------------------------------------
 
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                containerColor =
+                    MaterialTheme.colorScheme.primaryContainer
             )
         ) {
 
             Column(
                 modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment =
+                    Alignment.CenterHorizontally
             ) {
 
                 Text(
-                    text = language.verifiedResult,
+                    text = "QUALITY SCORE",
+                    style =
+                        MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = language.awaitingMeasurement,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                Spacer(
+                    modifier = Modifier.height(6.dp)
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = result.qualityScore
+                        ?.let {
+                            "${it.toInt()}/100"
+                        }
+                        ?: "—",
+                    fontSize = 40.sp,
+                    fontWeight = FontWeight.Bold,
+                    color =
+                        MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(
+                    modifier = Modifier.height(4.dp)
+                )
 
                 Text(
-                    text = language.connectHardware,
-                    textAlign = TextAlign.Center
+                    text = if (result.validated) {
+                        "Validated measurement"
+                    } else {
+                        "Prototype ML result"
+                    },
+                    style =
+                        MaterialTheme.typography.bodySmall
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        PendingResultRow(
-            label = language.protein,
-            source = "🔬 NIR"
+        Spacer(
+            modifier = Modifier.height(16.dp)
         )
 
-        PendingResultRow(
-            label = language.moisture,
-            source = "🔬 NIR / 📡 Sensor"
+        // -------------------------------------------------
+        // NUTRITION
+        // -------------------------------------------------
+
+        ResultCard(
+            title = "🥩 ${language.protein}",
+            value = result.protein
+                ?.let {
+                    "%.2f%%".format(it)
+                }
+                ?: "—"
         )
 
-        PendingResultRow(
-            label = language.fiber,
-            source = "🔬 NIR"
+        ResultCard(
+            title = "💧 ${language.moisture}",
+            value = result.moisture
+                ?.let {
+                    "%.2f%%".format(it)
+                }
+                ?: "—"
         )
 
-        PendingResultRow(
-            label = language.energy,
-            source = "🔬 NIR + Model"
+        ResultCard(
+            title = "🌾 ${language.fiber}",
+            value = result.fiber
+                ?.let {
+                    "%.2f%%".format(it)
+                }
+                ?: "—"
         )
 
-        PendingResultRow(
-            label = language.mineralStatus,
-            source = "🔬 NIR / Validated Model"
+        ResultCard(
+            title = "⚡ ${language.energy}",
+            value = result.energy
+                ?.let {
+                    "%.2f MJ/kg".format(it)
+                }
+                ?: "—"
         )
 
-        PendingResultRow(
-            label = language.ureaRisk,
-            source = "🔬 Spectral Model"
+        // -------------------------------------------------
+        // RISKS
+        // -------------------------------------------------
+
+        ResultCard(
+            title = "🍄 Mould Risk",
+            value = result.mouldRisk ?: "—"
         )
 
-        PendingResultRow(
-            label = language.silicaRisk,
-            source = "🔬 Spectral / Visual"
+        ResultCard(
+            title = "🧪 Adulteration Risk",
+            value = result.adulterationRisk ?: "—"
         )
 
-        PendingResultRow(
-            label = language.mycotoxinRisk,
-            source = "Validated module required"
+        ResultCard(
+            title = "📦 Storage Risk",
+            value = result.storageRisk ?: "—"
         )
 
-        PendingResultRow(
-            label = language.fungalRisk,
-            source = "📷 Visual + Model"
+        // -------------------------------------------------
+        // ADVISORY
+        // -------------------------------------------------
+
+        Spacer(
+            modifier = Modifier.height(6.dp)
         )
-
-        if (testType == "Silage") {
-
-            PendingResultRow(
-                label = language.ph,
-                source = "🧪 pH Sensor"
-            )
-
-            PendingResultRow(
-                label = language.fermentation,
-                source = "📡 Sensor + Model"
-            )
-
-            PendingResultRow(
-                label = language.spoilage,
-                source = "📷 + 📡"
-            )
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -1329,26 +1490,121 @@ fun ResultsScreen(
             ) {
 
                 Text(
-                    text = "💡 ${language.farmerAdvisory}",
-                    style = MaterialTheme.typography.titleMedium,
+                    text =
+                        "💡 ${language.farmerAdvisory}",
+                    style =
+                        MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
 
-                Spacer(modifier = Modifier.height(7.dp))
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                if (result.advisory.isEmpty()) {
+
+                    Text(
+                        text =
+                            "No advisory available."
+                    )
+
+                } else {
+
+                    result.advisory.forEach { advice ->
+
+                        Text(
+                            text = "• $advice",
+                            modifier =
+                                Modifier.padding(
+                                    bottom = 5.dp
+                                )
+                        )
+                    }
+                }
+            }
+        }
+
+        // -------------------------------------------------
+        // ML DETAILS
+        // -------------------------------------------------
+
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor =
+                    MaterialTheme.colorScheme.secondaryContainer
+            )
+        ) {
+
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
 
                 Text(
-                    text = language.advisoryPending
+                    text = "🤖 ML Analysis",
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Text(
+                    text =
+                        "Model: ${result.model ?: "—"}"
+                )
+
+                Text(
+                    text =
+                        "Mode: ${result.mode ?: "—"}"
+                )
+
+                Text(
+                    text =
+                        "Status: ${result.mlStatus ?: "—"}"
+                )
+
+                Text(
+                    text =
+                        "Confidence: ${
+                            result.confidence
+                                ?.let {
+                                    "%.0f%%".format(it)
+                                }
+                                ?: "—"
+                        }"
+                )
+
+                Spacer(
+                    modifier = Modifier.height(8.dp)
+                )
+
+                Text(
+                    text =
+                        result.analysisNote
+                            ?: "No analysis note available.",
+                    style =
+                        MaterialTheme.typography.bodySmall
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(
+            modifier = Modifier.height(14.dp)
+        )
 
         OutlinedButton(
             onClick = onQr,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("▦ ${language.qrVerify}")
+            Text(
+                "▦ ${language.qrVerify}"
+            )
         }
     }
 }
