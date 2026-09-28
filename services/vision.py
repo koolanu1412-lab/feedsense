@@ -38,16 +38,15 @@ def analyze_image(image_path: str | None) -> dict:
 
     height, width = image.shape[:2]
 
-    if width < 300 or height < 300:
-        return {
-            "status": "invalid",
-            "message": (
-                "Image resolution is too low. "
-                "Capture a clear close-up of the feed or silage sample."
-            ),
-            "validated": False,
-            "image_quality": "LOW",
-        }
+    if width < 100 or height < 100:
+    return {
+        "status": "invalid",
+        "message": (
+            "Image resolution is too low for visual screening."
+        ),
+        "validated": False,
+        "image_quality": "LOW",
+    }
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
