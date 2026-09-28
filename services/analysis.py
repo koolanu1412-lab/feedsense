@@ -40,7 +40,7 @@ def analyze_sample(data, image_path=None):
         28
     )
 
-       humidity = safe_float(
+    humidity = safe_float(
         data.get("humidity"),
         65
     )
