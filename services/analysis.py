@@ -4,7 +4,7 @@ from services.storage import calculate_storage_risk
 from services.nir import generate_demo_spectrum
 
 from ml.predict import predict_nutrition
-
+from services.vision import analyze_image
 
 def safe_float(value, default=0):
     try:
