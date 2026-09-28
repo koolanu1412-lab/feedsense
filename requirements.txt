@@ -6,3 +6,4 @@ gunicorn
 scikit-learn
 joblib
 numpy
+opencv-python-headless
