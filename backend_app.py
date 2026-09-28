@@ -161,13 +161,46 @@ def analyze():
                 image_path
             )
 
-        # -------------------------------------------------
+               # -------------------------------------------------
         # RUN ANALYSIS
         # -------------------------------------------------
 
         result = analyze_sample(
             data,
             image_path
+        )
+
+        # -------------------------------------------------
+        # STOP IF VISUAL SCREENING REJECTED THE IMAGE
+        # -------------------------------------------------
+
+        if result.get("analysis_blocked"):
+            return jsonify({
+                "success": False,
+                "message": "Image rejected during visual screening",
+                "error": result.get(
+                    "block_reason",
+                    "The uploaded image is not suitable for feed/silage screening."
+                ),
+                "result": {
+                    "sample_name": result.get("sample_name"),
+                    "sample_type": result.get("sample_type"),
+                    "visual_screening": result.get("visual_screening"),
+                    "advisory": result.get("advisory", []),
+                    "analysis_note": result.get("analysis_note")
+                }
+            }), 400
+
+        # -------------------------------------------------
+        # SAVE TO DATABASE
+        # -------------------------------------------------
+
+        sample_id = insert_sample(
+            result
+        )
+
+        saved_sample = get_sample(
+            sample_id
         )
 
         # -------------------------------------------------
