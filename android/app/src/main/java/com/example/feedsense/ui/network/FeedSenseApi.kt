@@ -42,7 +42,7 @@ data class ApiAnalysisResult(
 object FeedSenseApi {
 
     private const val BASE_URL =
-        "http://192.168.1.12:5000"
+        "http://127.0.0.1:5000"
 
 
     suspend fun analyzeSample(
