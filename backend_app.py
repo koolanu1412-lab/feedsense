@@ -32,13 +32,35 @@ CORS(app)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-REPORT_FOLDER = os.path.join(BASE_DIR, "reports")
-QR_FOLDER = os.path.join(BASE_DIR, "qr_codes")
+UPLOAD_FOLDER = os.path.join(
+    BASE_DIR,
+    "uploads"
+)
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(REPORT_FOLDER, exist_ok=True)
-os.makedirs(QR_FOLDER, exist_ok=True)
+REPORT_FOLDER = os.path.join(
+    BASE_DIR,
+    "reports"
+)
+
+QR_FOLDER = os.path.join(
+    BASE_DIR,
+    "qr_codes"
+)
+
+os.makedirs(
+    UPLOAD_FOLDER,
+    exist_ok=True
+)
+
+os.makedirs(
+    REPORT_FOLDER,
+    exist_ok=True
+)
+
+os.makedirs(
+    QR_FOLDER,
+    exist_ok=True
+)
 
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
@@ -71,15 +93,32 @@ def analyze():
         # -------------------------------------------------
 
         if request.is_json:
+
             data = request.get_json()
+
             image = None
 
         else:
+
             data = request.form.to_dict()
-            image = request.files.get("image")
+
+            image = request.files.get(
+                "image"
+            )
 
             if image is None:
-                image = request.files.get("photo")
+
+                image = request.files.get(
+                    "photo"
+                )
+
+        # -------------------------------------------------
+        # SAFETY CHECK
+        # -------------------------------------------------
+
+        if data is None:
+
+            data = {}
 
         # -------------------------------------------------
         # DEFAULT VALUES
@@ -103,7 +142,9 @@ def analyze():
 
         if image and image.filename:
 
-            safe_name = secure_filename(image.filename)
+            safe_name = secure_filename(
+                image.filename
+            )
 
             unique_name = (
                 str(uuid.uuid4())
@@ -116,7 +157,9 @@ def analyze():
                 unique_name
             )
 
-            image.save(image_path)
+            image.save(
+                image_path
+            )
 
         # -------------------------------------------------
         # RUN ANALYSIS
@@ -131,22 +174,63 @@ def analyze():
         # SAVE TO DATABASE
         # -------------------------------------------------
 
-        sample_id = insert_sample(result)
+        sample_id = insert_sample(
+            result
+        )
 
-        saved_sample = get_sample(sample_id)
+        saved_sample = get_sample(
+            sample_id
+        )
+
+        # -------------------------------------------------
+        # BUILD API RESPONSE
+        # -------------------------------------------------
+        #
+        # The database currently stores the main numeric
+        # result fields. ML metadata is added directly to
+        # the API response from the analysis result.
+        # -------------------------------------------------
+
+        api_result = dict(
+            saved_sample
+        )
+
+        api_result["ml_analysis"] = result.get(
+            "ml_analysis"
+        )
+
+        api_result["analysis_note"] = result.get(
+            "analysis_note"
+        )
+
+        api_result["visual_screening"] = result.get(
+            "visual_screening"
+        )
 
         return jsonify({
+
             "success": True,
-            "message": "Sample analyzed successfully",
-            "sample_id": sample_id,
-            "result": saved_sample
+
+            "message":
+                "Sample analyzed successfully",
+
+            "sample_id":
+                sample_id,
+
+            "result":
+                api_result
+
         }), 200
 
     except Exception as e:
 
         return jsonify({
+
             "success": False,
-            "error": str(e)
+
+            "error":
+                str(e)
+
         }), 500
 
 
@@ -162,16 +246,28 @@ def samples():
         all_samples = get_all_samples()
 
         return jsonify({
-            "success": True,
-            "count": len(all_samples),
-            "samples": all_samples
+
+            "success":
+                True,
+
+            "count":
+                len(all_samples),
+
+            "samples":
+                all_samples
+
         })
 
     except Exception as e:
 
         return jsonify({
-            "success": False,
-            "error": str(e)
+
+            "success":
+                False,
+
+            "error":
+                str(e)
+
         }), 500
 
 
@@ -179,21 +275,36 @@ def samples():
 # GET ONE SAMPLE
 # =========================================================
 
-@app.route("/api/samples/<int:sample_id>", methods=["GET"])
+@app.route(
+    "/api/samples/<int:sample_id>",
+    methods=["GET"]
+)
 def sample_details(sample_id):
 
-    sample = get_sample(sample_id)
+    sample = get_sample(
+        sample_id
+    )
 
     if sample is None:
 
         return jsonify({
-            "success": False,
-            "message": "Sample not found"
+
+            "success":
+                False,
+
+            "message":
+                "Sample not found"
+
         }), 404
 
     return jsonify({
-        "success": True,
-        "sample": sample
+
+        "success":
+            True,
+
+        "sample":
+            sample
+
     })
 
 
@@ -201,7 +312,10 @@ def sample_details(sample_id):
 # NIR DEMO
 # =========================================================
 
-@app.route("/api/nir-demo", methods=["GET"])
+@app.route(
+    "/api/nir-demo",
+    methods=["GET"]
+)
 def nir_demo():
 
     return jsonify(
@@ -213,7 +327,10 @@ def nir_demo():
 # SENSOR DATA
 # =========================================================
 
-@app.route("/api/sensors", methods=["POST"])
+@app.route(
+    "/api/sensors",
+    methods=["POST"]
+)
 def add_sensor():
 
     try:
@@ -223,33 +340,82 @@ def add_sensor():
         if not data:
 
             return jsonify({
-                "success": False,
-                "message": "JSON data required"
+
+                "success":
+                    False,
+
+                "message":
+                    "JSON data required"
+
             }), 400
 
         from datetime import datetime
 
         sensor_data = {
-            "created_at": datetime.now().isoformat(),
-            "moisture": float(data.get("moisture", 0)),
-            "temperature": float(data.get("temperature", 0)),
-            "humidity": float(data.get("humidity", 0)),
-            "ph": float(data.get("ph", 0))
+
+            "created_at":
+                datetime.now().isoformat(),
+
+            "moisture":
+                float(
+                    data.get(
+                        "moisture",
+                        0
+                    )
+                ),
+
+            "temperature":
+                float(
+                    data.get(
+                        "temperature",
+                        0
+                    )
+                ),
+
+            "humidity":
+                float(
+                    data.get(
+                        "humidity",
+                        0
+                    )
+                ),
+
+            "ph":
+                float(
+                    data.get(
+                        "ph",
+                        0
+                    )
+                )
         }
 
-        insert_sensor(sensor_data)
+        insert_sensor(
+            sensor_data
+        )
 
         return jsonify({
-            "success": True,
-            "message": "Sensor data saved",
-            "data": sensor_data
+
+            "success":
+                True,
+
+            "message":
+                "Sensor data saved",
+
+            "data":
+                sensor_data
+
         })
 
     except Exception as e:
 
         return jsonify({
-            "success": False,
-            "error": str(e)
+
+            "success":
+                False,
+
+            "error":
+                str(e)
+
         }), 500
 
 
@@ -257,7 +423,10 @@ def add_sensor():
 # LATEST SENSOR DATA
 # =========================================================
 
-@app.route("/api/sensors/latest", methods=["GET"])
+@app.route(
+    "/api/sensors/latest",
+    methods=["GET"]
+)
 def latest_sensor():
 
     data = get_latest_sensor()
@@ -265,13 +434,23 @@ def latest_sensor():
     if data is None:
 
         return jsonify({
-            "success": False,
-            "message": "No sensor data available"
+
+            "success":
+                False,
+
+            "message":
+                "No sensor data available"
+
         }), 404
 
     return jsonify({
-        "success": True,
-        "data": data
+
+        "success":
+            True,
+
+        "data":
+            data
+
     })
 
 
@@ -279,46 +458,87 @@ def latest_sensor():
 # STORAGE STATUS
 # =========================================================
 
-@app.route("/api/storage-status", methods=["GET"])
+@app.route(
+    "/api/storage-status",
+    methods=["GET"]
+)
 def storage_status():
 
     sensor = get_latest_sensor()
 
-    # Allow manual testing with URL parameters
+    # -----------------------------------------------------
+    # USE LATEST SENSOR DATA
+    # -----------------------------------------------------
+
     if sensor is not None:
 
         moisture = sensor["moisture"]
-        temperature = sensor["temperature"]
-        humidity = sensor["humidity"]
+
+        temperature = sensor[
+            "temperature"
+        ]
+
+        humidity = sensor[
+            "humidity"
+        ]
+
+    # -----------------------------------------------------
+    # OR USE URL PARAMETERS
+    # -----------------------------------------------------
 
     else:
 
         moisture = float(
-            request.args.get("moisture", 14.2)
+            request.args.get(
+                "moisture",
+                14.2
+            )
         )
 
         temperature = float(
-            request.args.get("temperature", 29)
+            request.args.get(
+                "temperature",
+                29
+            )
         )
 
         humidity = float(
-            request.args.get("humidity", 72)
+            request.args.get(
+                "humidity",
+                72
+            )
         )
 
     risk = calculate_storage_risk(
+
         moisture,
+
         temperature,
+
         humidity
+
     )
 
     return jsonify({
-        "success": True,
+
+        "success":
+            True,
+
         "storage": {
-            "moisture": moisture,
-            "temperature": temperature,
-            "humidity": humidity,
-            "risk": risk
+
+            "moisture":
+                moisture,
+
+            "temperature":
+                temperature,
+
+            "humidity":
+                humidity,
+
+            "risk":
+                risk
         }
+
     })
 
 
@@ -326,35 +546,58 @@ def storage_status():
 # PDF REPORT
 # =========================================================
 
-@app.route("/api/report/<int:sample_id>", methods=["GET"])
+@app.route(
+    "/api/report/<int:sample_id>",
+    methods=["GET"]
+)
 def report(sample_id):
 
-    sample = get_sample(sample_id)
+    sample = get_sample(
+        sample_id
+    )
 
     if sample is None:
 
         return jsonify({
-            "success": False,
-            "message": "Sample not found"
+
+            "success":
+                False,
+
+            "message":
+                "Sample not found"
+
         }), 404
 
-    filename = f"FeedSense_Report_FS-{sample_id}.pdf"
+    filename = (
+        f"FeedSense_Report_FS-{sample_id}.pdf"
+    )
 
     filepath = os.path.join(
+
         REPORT_FOLDER,
+
         filename
+
     )
 
     create_pdf(
+
         sample,
+
         filepath
+
     )
 
     return send_file(
+
         filepath,
+
         as_attachment=True,
+
         download_name=filename,
+
         mimetype="application/pdf"
+
     )
 
 
@@ -362,33 +605,54 @@ def report(sample_id):
 # QR DIGITAL PASSPORT
 # =========================================================
 
-@app.route("/api/qr/<int:sample_id>", methods=["GET"])
+@app.route(
+    "/api/qr/<int:sample_id>",
+    methods=["GET"]
+)
 def qr_code(sample_id):
 
-    sample = get_sample(sample_id)
+    sample = get_sample(
+        sample_id
+    )
 
     if sample is None:
 
         return jsonify({
-            "success": False,
-            "message": "Sample not found"
+
+            "success":
+                False,
+
+            "message":
+                "Sample not found"
+
         }), 404
 
-    filename = f"FeedSense_QR_FS-{sample_id}.png"
+    filename = (
+        f"FeedSense_QR_FS-{sample_id}.png"
+    )
 
     filepath = os.path.join(
+
         QR_FOLDER,
+
         filename
+
     )
 
     create_qr(
+
         sample,
+
         filepath
+
     )
 
     return send_file(
+
         filepath,
+
         mimetype="image/png"
+
     )
 
 
@@ -404,15 +668,23 @@ if __name__ == "__main__":
     print("===================================")
     print("       FeedSense Backend")
     print("===================================")
-    print("Server: http://127.0.0.1:5000")
+    print(
+        "Server: http://127.0.0.1:5000"
+    )
     print("")
     print("Health:")
-    print("http://127.0.0.1:5000/api/health")
+    print(
+        "http://127.0.0.1:5000/api/health"
+    )
     print("===================================")
     print("")
 
     app.run(
+
         host="0.0.0.0",
+
         port=5000,
+
         debug=True
+
     )
