@@ -63,7 +63,8 @@ os.makedirs(
 )
 
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
-
+# Initialize database when the app starts
+init_db()
 
 # =========================================================
 # HEALTH CHECK
@@ -695,7 +696,7 @@ def qr_code(sample_id):
 
 if __name__ == "__main__":
 
-    init_db()
+  
 
     print("")
     print("===================================")
