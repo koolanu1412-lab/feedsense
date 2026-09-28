@@ -52,34 +52,33 @@ def analyze_sample(data, image_path=None):
     ml_result = None
     ml_error = None
 
-    try:
+   try:
 
-        # Current spectrometer implementation is still a
-        # simulated/demo spectrum.
-        spectrum = generate_demo_spectrum()
-        
-        nir_points = spectrum.get(
-            "spectrum",
-            []
-        )
-        
-        nir_values = [
-            point["absorbance"]
-            for point in nir_points
-        ]
+    # Current spectrometer implementation is still a
+    # simulated/demo spectrum.
+    spectrum = generate_demo_spectrum()
 
-        ml_result = predict_nutrition(
-            moisture=moisture,
-            ph=ph,
-            temperature=temperature,
-            humidity=humidity,
-            nir_values=nir_values
-        )
+    nir_points = spectrum.get(
+        "spectrum",
+        []
+    )
 
-    except Exception as error:
+    nir_values = [
+        point["absorbance"]
+        for point in nir_points
+    ]
 
-        ml_error = str(error)
+    ml_result = predict_nutrition(
+        moisture=moisture,
+        ph=ph,
+        temperature=temperature,
+        humidity=humidity,
+        nir_values=nir_values
+    )
 
+except Exception as error:
+
+    ml_error = str(error)
     # =========================================================
     # NUTRITION VALUES
     # =========================================================
