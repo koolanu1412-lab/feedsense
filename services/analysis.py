@@ -40,10 +40,71 @@ def analyze_sample(data, image_path=None):
         28
     )
 
-    humidity = safe_float(
+       humidity = safe_float(
         data.get("humidity"),
         65
     )
+
+    # =========================================================
+    # VISUAL SCREENING
+    # =========================================================
+
+    visual_screening = analyze_image(image_path)
+
+    if visual_screening.get("status") == "invalid":
+        return {
+            "sample_name": sample_name,
+            "sample_type": sample_type,
+            "created_at": datetime.now().isoformat(),
+
+            "quality_score": None,
+            "protein": None,
+            "fiber": None,
+            "energy": None,
+
+            "moisture": None,
+            "ph": None,
+            "temperature": None,
+            "humidity": None,
+
+            "mould_risk": None,
+            "adulteration_risk": None,
+            "storage_risk": None,
+
+            "confidence": 0,
+
+            "advisory": [
+                visual_screening.get(
+                    "message",
+                    "Image rejected during visual screening."
+                )
+            ],
+
+            "visual_screening": visual_screening,
+
+            "ml_analysis": {
+                "status": "NOT RUN",
+                "model": None,
+                "mode": None,
+                "validated": False
+            },
+
+            "analysis_note": (
+                "Analysis stopped because the uploaded image "
+                "did not pass prototype visual screening."
+            ),
+
+            "image_path": image_path,
+
+            "analysis_blocked": True,
+
+            "block_reason": visual_screening.get(
+                "message",
+                "The uploaded image is not suitable for feed/silage analysis."
+            )
+        }
+
+   
 
        # =========================================================
     # NIR + ML NUTRITION PREDICTION
