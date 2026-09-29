@@ -30,3 +30,9 @@ build/
 
 # IDE module files
 *.iml
+
+# Backend runtime files
+feedsense.db
+uploads/*
+reports/*
+qr_codes/*
