@@ -4,36 +4,30 @@ import android.graphics.Bitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.io.BufferedReader
 import java.io.ByteArrayOutputStream
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.charset.StandardCharsets
 
 
 data class ApiAnalysisResult(
     val sampleId: Int,
     val sampleName: String,
     val sampleType: String,
-
     val qualityScore: Double?,
     val protein: Double?,
     val moisture: Double?,
     val fiber: Double?,
     val energy: Double?,
-
     val mouldRisk: String?,
     val adulterationRisk: String?,
     val storageRisk: String?,
-
     val confidence: Double?,
     val advisory: List<String>,
-
     val mlStatus: String?,
     val model: String?,
     val mode: String?,
     val validated: Boolean,
-
     val analysisNote: String?,
     val imagePath: String?
 )
@@ -42,34 +36,25 @@ data class ApiAnalysisResult(
 object FeedSenseApi {
 
     private const val BASE_URL =
-        "http://127.0.0.1:5000"
-
+        "https://feedsense-itqj.onrender.com"
 
     suspend fun analyzeSample(
         sampleType: String,
         imageBitmap: Bitmap?
-    ): ApiAnalysisResult = withContext(
-        Dispatchers.IO
-    ) {
-
-        val url = URL(
-            "$BASE_URL/api/analyze"
-        )
+    ): ApiAnalysisResult = withContext(Dispatchers.IO) {
 
         val connection =
-            url.openConnection() as HttpURLConnection
+            URL("$BASE_URL/api/analyze").openConnection() as HttpURLConnection
 
         val boundary =
-            "----FeedSenseBoundary${System.currentTimeMillis()}"
+            "FeedSenseBoundary${System.currentTimeMillis()}"
 
         try {
-
             connection.requestMethod = "POST"
-
             connection.connectTimeout = 10000
             connection.readTimeout = 30000
-
             connection.doOutput = true
+            connection.doInput = true
 
             connection.setRequestProperty(
                 "Content-Type",
@@ -81,145 +66,138 @@ object FeedSenseApi {
                 "application/json"
             )
 
-            connection.outputStream.use { output ->
+            // Build the complete request body first.
+            val body = ByteArrayOutputStream()
 
-                // -----------------------------------------
-                // SAMPLE NAME
-                // -----------------------------------------
-
-                output.write(
-                    "--$boundary\r\n".toByteArray()
-                )
-
-                output.write(
-                    "Content-Disposition: form-data; name=\"sample_name\"\r\n\r\n"
-                        .toByteArray()
-                )
-
-                output.write(
-                    "Mobile $sampleType Test\r\n"
-                        .toByteArray()
-                )
-
-
-                // -----------------------------------------
-                // SAMPLE TYPE
-                // -----------------------------------------
-
-                output.write(
-                    "--$boundary\r\n".toByteArray()
-                )
-
-                output.write(
-                    "Content-Disposition: form-data; name=\"sample_type\"\r\n\r\n"
-                        .toByteArray()
-                )
-
-                output.write(
-                    "$sampleType\r\n"
-                        .toByteArray()
-                )
-
-
-                // -----------------------------------------
-                // IMAGE
-                // -----------------------------------------
-
-                if (imageBitmap != null) {
-
-                    val imageBytes =
-                        compressBitmap(imageBitmap)
-
-                    output.write(
-                        "--$boundary\r\n".toByteArray()
-                    )
-
-                    output.write(
-                        (
-                                "Content-Disposition: form-data; " +
-                                        "name=\"image\"; " +
-                                        "filename=\"feedsense_sample.jpg\"\r\n"
-                                ).toByteArray()
-                    )
-
-                    output.write(
-                        "Content-Type: image/jpeg\r\n\r\n"
-                            .toByteArray()
-                    )
-
-                    output.write(imageBytes)
-
-                    output.write(
-                        "\r\n".toByteArray()
-                    )
-                }
-
-
-                // -----------------------------------------
-                // END REQUEST
-                // -----------------------------------------
-
-                output.write(
-                    "--$boundary--\r\n".toByteArray()
+            fun writeText(value: String) {
+                body.write(
+                    value.toByteArray(StandardCharsets.UTF_8)
                 )
             }
 
+            // -------------------------------------------------
+            // SAMPLE NAME
+            // -------------------------------------------------
 
-            // ---------------------------------------------
-            // RESPONSE
-            // ---------------------------------------------
+            writeText("--$boundary\r\n")
+            writeText(
+                "Content-Disposition: form-data; " +
+                        "name=\"sample_name\"\r\n\r\n"
+            )
+            writeText("Mobile $sampleType Test\r\n")
+
+            // -------------------------------------------------
+            // SAMPLE TYPE
+            // -------------------------------------------------
+
+            writeText("--$boundary\r\n")
+            writeText(
+                "Content-Disposition: form-data; " +
+                        "name=\"sample_type\"\r\n\r\n"
+            )
+            writeText("$sampleType\r\n")
+
+            // -------------------------------------------------
+            // IMAGE
+            // -------------------------------------------------
+
+            if (imageBitmap != null) {
+
+                val imageBytes =
+                    compressBitmap(imageBitmap)
+
+                writeText("--$boundary\r\n")
+                writeText(
+                    "Content-Disposition: form-data; " +
+                            "name=\"image\"; " +
+                            "filename=\"feedsense_sample.jpg\"\r\n"
+                )
+                writeText(
+                    "Content-Type: image/jpeg\r\n\r\n"
+                )
+
+                body.write(
+                    imageBytes,
+                    0,
+                    imageBytes.size
+                )
+
+                writeText("\r\n")
+            }
+
+            // -------------------------------------------------
+            // END MULTIPART BODY
+            // -------------------------------------------------
+
+            writeText("--$boundary--\r\n")
+
+            connection.outputStream.use { output ->
+                output.write(body.toByteArray())
+                output.flush()
+            }
+
+            // -------------------------------------------------
+            // RESPONSE CODE
+            // -------------------------------------------------
 
             val responseCode =
                 connection.responseCode
 
-            val inputStream =
-                if (responseCode in 200..299) {
-                    connection.inputStream
-                } else {
-                    connection.errorStream
-                }
-
-            val responseText =
-                BufferedReader(
-                    InputStreamReader(inputStream)
-                ).use {
-                    it.readText()
-                }
-
-            if (responseCode !in 200..299) {
-
+            // HTTP 400 = image rejected by visual screening.
+            if (responseCode == 400) {
                 throw Exception(
-                    "Backend returned HTTP $responseCode: $responseText"
+                    "Image rejected during visual screening. " +
+                            "Please upload a clear feed or silage sample."
                 )
             }
 
-            parseAnalysisResponse(
-                responseText
-            )
+            if (responseCode !in 200..299) {
+                throw Exception(
+                    "Backend returned HTTP $responseCode"
+                )
+            }
+
+            // -------------------------------------------------
+            // SUCCESS RESPONSE
+            // -------------------------------------------------
+
+            val responseText =
+                connection.inputStream
+                    .bufferedReader()
+                    .use {
+                        it.readText()
+                    }
+
+            parseAnalysisResponse(responseText)
 
         } finally {
-
             connection.disconnect()
         }
     }
 
+    // ---------------------------------------------------------
+    // BITMAP → JPEG
+    // ---------------------------------------------------------
 
     private fun compressBitmap(
         bitmap: Bitmap
     ): ByteArray {
 
-        val outputStream =
+        val output =
             ByteArrayOutputStream()
 
         bitmap.compress(
             Bitmap.CompressFormat.JPEG,
-            80,
-            outputStream
+            85,
+            output
         )
 
-        return outputStream.toByteArray()
+        return output.toByteArray()
     }
 
+    // ---------------------------------------------------------
+    // PARSE BACKEND RESPONSE
+    // ---------------------------------------------------------
 
     private fun parseAnalysisResponse(
         responseText: String
@@ -229,7 +207,6 @@ object FeedSenseApi {
             JSONObject(responseText)
 
         if (!root.optBoolean("success")) {
-
             throw Exception(
                 root.optString(
                     "error",
@@ -242,24 +219,18 @@ object FeedSenseApi {
             root.getJSONObject("result")
 
         val mlAnalysis =
-            result.optJSONObject(
-                "ml_analysis"
-            )
+            result.optJSONObject("ml_analysis")
 
         val advisoryArray =
-            result.optJSONArray(
-                "advisory"
-            )
+            result.optJSONArray("advisory")
 
         val advisory =
             mutableListOf<String>()
 
         if (advisoryArray != null) {
-
             for (
             index in 0 until advisoryArray.length()
             ) {
-
                 advisory.add(
                     advisoryArray.optString(index)
                 )
@@ -368,6 +339,10 @@ object FeedSenseApi {
     }
 }
 
+
+// -------------------------------------------------------------
+// JSON HELPERS
+// -------------------------------------------------------------
 
 private fun JSONObject.optDoubleOrNull(
     key: String
